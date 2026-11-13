@@ -1,6 +1,3 @@
-# Ignore temporary scratch files and raw spreadsheet dumps
-scratch/
-*.csv
-*.xlsx
+# Ignore local node_modules and OS files
 node_modules/
 .DS_Store
