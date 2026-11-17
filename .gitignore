@@ -1,3 +1,4 @@
-# Ignore local node_modules and OS files
+# Ignore local node_modules, clasp auth credentials, and OS files
 node_modules/
+.clasprc.json
 .DS_Store

@@ -1,0 +1,7 @@
+**/**
+!*.gs
+!appsscript.json
+scratch/**
+conversation_history/**
+node_modules/**
+.git/**

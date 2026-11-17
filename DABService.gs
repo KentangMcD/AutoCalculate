@@ -8,12 +8,18 @@ class DABService {
 
   /**
    * Formula total Diskon Alat Bayar pada tabel SALES (diletakkan pada baris pertama).
+   * Mendukung % Benefit (D) maupun Rp Benefit (E).
    * @param {string} netPrevSum - Misal 'SUM(AL70:AL88)'
    * @param {string} maxRpCell - Misal 'L42'
-   * @param {string} pctBenefitCell - Misal 'D42'
+   * @param {string} benefitCell - Misal 'D42' (%) atau 'E42' (Rp)
+   * @param {string|null} minRpCell - Misal 'C42' jika menggunakan Rp Benefit
+   * @param {boolean} isRpBenefit - True jika promo DAB menggunakan potongan nominal Rp Benefit
    */
-  buildSalesTotalFormula(netPrevSum, maxRpCell, pctBenefitCell) {
-    return `=CEILING(ROUNDDOWN(MIN(${maxRpCell},${netPrevSum})*${pctBenefitCell},100),1)`;
+  buildSalesTotalFormula(netPrevSum, maxRpCell, benefitCell, minRpCell = null, isRpBenefit = false) {
+    if (isRpBenefit && minRpCell) {
+      return `=CEILING(ROUNDDOWN(MIN(${maxRpCell},${netPrevSum})/${minRpCell},0)*${benefitCell},100)`;
+    }
+    return `=CEILING(ROUNDDOWN(MIN(${maxRpCell},${netPrevSum})*${benefitCell},100),1)`;
   }
 
   /**

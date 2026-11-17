@@ -14,6 +14,7 @@ class DataLoader {
   loadAll() {
     this.loadPluMaster();
     this.loadInputSheet();
+    this.autoDistributeIfTotalStockEntered();
     this.validate();
     return {
       productsMap: this.productsMap,
@@ -231,6 +232,39 @@ class DataLoader {
           }
 
           this.transactions.push(item);
+        }
+      }
+    }
+  }
+
+  /**
+   * Jika user memasukkan total Qty Stok PLU pada salah satu baris (misal baris Non-Paket
+   * sehingga qtyAktual > qtyBeli sementara baris paket lainnya bernilai 0), distribusikan
+   * total stok tersebut ke seluruh paket PLU yang sama berdasarkan prioritas paket.
+   */
+  autoDistributeIfTotalStockEntered() {
+    const groupedByPlu = new Map();
+    for (const item of this.transactions) {
+      if (!groupedByPlu.has(item.plu)) {
+        groupedByPlu.set(item.plu, []);
+      }
+      groupedByPlu.get(item.plu).push(item);
+    }
+
+    const DistServiceClass = (typeof QtyDistributionService !== 'undefined')
+      ? QtyDistributionService
+      : (typeof require !== 'undefined' ? require('./QtyDistributionService.gs').QtyDistributionService : null);
+
+    if (!DistServiceClass) return;
+    const distService = new DistServiceClass();
+
+    for (const [plu, pluItems] of groupedByPlu.entries()) {
+      if (pluItems.length > 1 && pluItems.some(it => it.qtyAktual > it.qtyBeli)) {
+        const totalStock = pluItems.reduce((sum, it) => sum + (it.qtyAktual || 0), 0);
+        const totalQtyBeli = pluItems.reduce((sum, it) => sum + (it.qtyBeli || 0), 0);
+        if (totalStock <= totalQtyBeli) {
+          const stockMap = new Map([[plu, totalStock]]);
+          distService.distributeStock(pluItems, stockMap);
         }
       }
     }

@@ -86,6 +86,31 @@ class PromoRule {
   }
 
   /**
+   * Mengembalikan nilai tampilan Mekanisme Beli pada tabel Tipe Promo di tab Result.
+   * Khusus untuk Bundling, Mekanisme Beli ditampilkan '-' sesuai Result Refference.
+   */
+  getMekanismeBeli() {
+    if (this.getDisplayType() === 'Non Base - Bundling') {
+      return '-';
+    }
+    const hasQtyMin = this.qtyMin !== null && !isNaN(this.qtyMin);
+    const hasRpMin = this.rpMin !== null && !isNaN(this.rpMin);
+    return hasQtyMin ? this.qtyMin : (hasRpMin ? this.rpMin : '-');
+  }
+
+  /**
+   * Mengembalikan format tampilan Item Target (gabung multi-PLU dengan '/' pada 1 baris).
+   */
+  getFormattedTargetItem() {
+    const list = this.getTargetItemList();
+    if (list.length === 0) return '-';
+    if (list.length === 1) {
+      return !isNaN(Number(list[0])) ? Number(list[0]) : list[0];
+    }
+    return list.join('/');
+  }
+
+  /**
    * Mengecek apakah promo berlaku untuk semua PLU (All PLU).
    */
   isAllPlu() {

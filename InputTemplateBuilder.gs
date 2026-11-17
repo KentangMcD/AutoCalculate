@@ -73,17 +73,26 @@ class InputTemplateBuilder {
       ["CART STAMP", "HOKA0908", "-", 45000, "-", "-", 4, "-", "All PLU", "Y", "Y", "-", 225000]
     ];
 
+    const promoTotalRows = promoData.length + 10;
     sheet.getRange(3, 1, promoData.length, promoHeaders.length).setValues(promoData);
 
     // Format kolom persentase
-    sheet.getRange(3, 5, promoData.length, 1).setNumberFormat("0%");
+    sheet.getRange(3, 5, promoTotalRows, 1).setNumberFormat("0%");
     // Format kolom Rupiah
-    sheet.getRange(3, 4, promoData.length, 1).setNumberFormat("Rp#,##0");
-    sheet.getRange(3, 6, promoData.length, 1).setNumberFormat("Rp#,##0");
-    sheet.getRange(3, 13, promoData.length, 1).setNumberFormat("Rp#,##0");
+    sheet.getRange(3, 4, promoTotalRows, 1).setNumberFormat("Rp#,##0");
+    sheet.getRange(3, 6, promoTotalRows, 1).setNumberFormat("Rp#,##0");
+    sheet.getRange(3, 13, promoTotalRows, 1).setNumberFormat("Rp#,##0");
+
+    // Terapkan Dropdown (Data Validation) untuk Tipe Promo, Campur, dan Kelipatan
+    this.applyDropdown(sheet.getRange(3, 1, promoTotalRows, 1), [
+      "Harga Coret", "Upsell", "Bundling", "PHG", "FAIR POTAL", "FAIR TMH",
+      "FAIR HADIAH GRATIS", "FAIR DAB", "Base Poin", "Base STAMP",
+      "FAIR Poin", "FAIR STAMP", "CART Poin", "CART STAMP"
+    ]);
+    this.applyDropdown(sheet.getRange(3, 10, promoTotalRows, 2), ["Y", "N", "-"]);
 
     // 2. Bagian Bawah: TRANSACTION & REFUND INPUT
-    const txStartRow = 3 + promoData.length + 2;
+    const txStartRow = 3 + promoTotalRows + 2;
     sheet.getRange(txStartRow, 2).setValue("TRANSACTION & REFUND INPUT").setFontWeight("bold").setFontSize(11);
 
     const txHeaders = ["Paket", "PLU", "Qty Beli", "Qty Aktual", "Kartonan Only"];
@@ -113,15 +122,19 @@ class InputTemplateBuilder {
       ["Fair Tebus Murah - PLFFTM07", "20087542", 10, 0, "N"]
     ];
 
+    const txTotalRows = txData.length + 10;
     sheet.getRange(txStartRow + 3, 2, txData.length, txHeaders.length).setValues(txData);
 
     // Format Qty Beli & Qty Aktual
-    sheet.getRange(txStartRow + 3, 4, txData.length, 2).setNumberFormat("#,##0");
+    sheet.getRange(txStartRow + 3, 4, txTotalRows, 2).setNumberFormat("#,##0");
+
+    // Terapkan Dropdown (Data Validation) untuk Kartonan Only
+    this.applyDropdown(sheet.getRange(txStartRow + 3, 6, txTotalRows, 1), ["Y", "N"]);
 
     // Border grid
     const borderStyle = (typeof SpreadsheetApp !== 'undefined' && SpreadsheetApp.BorderStyle) ? SpreadsheetApp.BorderStyle.SOLID : null;
-    sheet.getRange(2, 1, promoData.length + 1, promoHeaders.length).setBorder(true, true, true, true, true, true, "#D3D3D3", borderStyle);
-    sheet.getRange(txStartRow + 2, 2, txData.length + 1, txHeaders.length).setBorder(true, true, true, true, true, true, "#D3D3D3", borderStyle);
+    sheet.getRange(2, 1, promoTotalRows + 1, promoHeaders.length).setBorder(true, true, true, true, true, true, "#D3D3D3", borderStyle);
+    sheet.getRange(txStartRow + 2, 2, txTotalRows + 1, txHeaders.length).setBorder(true, true, true, true, true, true, "#D3D3D3", borderStyle);
 
     // Auto-fit kolom
     for (let c = 1; c <= promoHeaders.length; c++) {
@@ -129,6 +142,19 @@ class InputTemplateBuilder {
     }
 
     return sheet;
+  }
+
+  /**
+   * Menerapkan Data Validation dropdown secara aman ke suatu range Google Sheets.
+   */
+  applyDropdown(range, options) {
+    if (typeof SpreadsheetApp !== 'undefined' && SpreadsheetApp.newDataValidation && range.setDataValidation) {
+      const rule = SpreadsheetApp.newDataValidation()
+        .requireValueInList(options, true)
+        .setAllowInvalid(true)
+        .build();
+      range.setDataValidation(rule);
+    }
   }
 
   /**

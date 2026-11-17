@@ -119,7 +119,7 @@ class ResultSheetBuilder {
     if (eoLen > 0) {
       sheet.getRange(editOrderStartRow, 1, eoLen, 1).setValues(editOrderSummary.map(it => [Number(it.plu) || it.plu]));
       sheet.getRange(editOrderStartRow, 2, eoLen, 1).setFormulas(editOrderSummary.map((it, i) => [`=IFERROR(VLOOKUP(A${editOrderStartRow + i},'PLU Master'!$B:$C, 2, FALSE),"")`]));
-      sheet.getRange(editOrderStartRow, 3, eoLen, 1).setFormulas(editOrderSummary.map((it, i) => [`=SUMIF($B$${salesStartRow}:$B$${salesEndRow},A${editOrderStartRow + i},$E$${salesStartRow}:$E$${salesEndRow})`]));
+      sheet.getRange(editOrderStartRow, 3, eoLen, 1).setFormulas(editOrderSummary.map((it, i) => [`=SUMIF($${salesColMap.plu.letter}$${salesStartRow}:$${salesColMap.plu.letter}$${salesEndRow},A${editOrderStartRow + i},$${salesColMap.qty.letter}$${salesStartRow}:$${salesColMap.qty.letter}$${salesEndRow})`]));
       sheet.getRange(editOrderStartRow, 4, eoLen, 1).setValues(editOrderSummary.map(it => [it.qtyStok]));
       sheet.getRange(editOrderStartRow, 5, eoLen, 1).setFormulas(editOrderSummary.map((it, i) => [`=C${editOrderStartRow + i}-D${editOrderStartRow + i}`]));
     }
@@ -240,9 +240,8 @@ class ResultSheetBuilder {
       const showType = displayType !== lastDisplayedType ? displayType : '';
       lastDisplayedType = displayType;
 
-      const hasQtyMin = rule.qtyMin !== null && !isNaN(rule.qtyMin);
-      const hasRpMin = rule.rpMin !== null && !isNaN(rule.rpMin);
-      const minVal = hasQtyMin ? rule.qtyMin : (hasRpMin ? rule.rpMin : '-');
+      const minVal = rule.getMekanismeBeli();
+      const hasRpMin = minVal !== '-' && rule.qtyMin === null && rule.rpMin !== null;
 
       const pctVal = rule.pctBenefit !== null && !isNaN(rule.pctBenefit) ? rule.pctBenefit : '-';
       const rpVal = rule.rpBenefit !== null && !isNaN(rule.rpBenefit) ? rule.rpBenefit : '-';
@@ -252,9 +251,7 @@ class ResultSheetBuilder {
       const hasRpMax = rule.rpMax !== null && !isNaN(rule.rpMax);
       const maxVal = hasQtyMax ? rule.qtyMax : (hasRpMax ? rule.rpMax : '-');
 
-      const targetVal = rule.targetItem && rule.targetItem !== '-'
-        ? (!isNaN(Number(rule.targetItem)) ? Number(rule.targetItem) : rule.targetItem)
-        : '-';
+      const targetVal = rule.getFormattedTargetItem();
 
       // Daftar PLU yang akan dirender per sub-baris
       const pluRows = rule.isAllPlu() ? ['All PLU'] : (plus.length > 0 ? plus : ['-']);
@@ -367,6 +364,7 @@ class ResultSheetBuilder {
       pushCol("Qty Refund", "qtyRefund");
     }
 
+    pushCol("Is Kartonan", "isKarton");
     pushCol("Gross Sales", "gross");
     pushCol("Diskon Karton", "karton");
     pushCol("Net Sales After Karton", "netKarton");
@@ -460,21 +458,30 @@ class ResultSheetBuilder {
         lastShownPacket = item.packet;
       }
 
+      const sPlu = salesColMap.plu.letter;
+      const sHarga = salesColMap.harga.letter;
+      const sQty = salesColMap.qty.letter;
+      const sIsKarton = salesColMap.isKarton.letter;
+      const sGross = salesColMap.gross.letter;
+      const sKarton = salesColMap.karton.letter;
+
       // Col A: Paket, Col B: PLU
       rowFormulas.push(pktLabel);
       rowFormulas.push(Number(item.plu) || item.plu);
       // Col C: Judul Produk
-      rowFormulas.push(`=IFERROR(VLOOKUP(B${r},'PLU Master'!$B:$C, 2, FALSE),"")`);
+      rowFormulas.push(`=IFERROR(VLOOKUP(${sPlu}${r},'PLU Master'!$B:$C, 2, FALSE),"")`);
       // Col D: Harga
-      rowFormulas.push(`=IFERROR(VLOOKUP(B${r},'PLU Master'!$B:$D, 3, FALSE),0)`);
+      rowFormulas.push(`=IFERROR(VLOOKUP(${sPlu}${r},'PLU Master'!$B:$D, 3, FALSE),0)`);
       // Col E: Qty
       rowFormulas.push(item.qtyBeli);
-      // Col F: Gross Sales
-      rowFormulas.push(`=D${r}*E${r}`);
-      // Col G: Diskon Karton
-      rowFormulas.push(this.services.kartonan.buildDiskonKartonFormula(`B${r}`, `E${r}`, item.isKarton));
-      // Col H: Net After Karton
-      rowFormulas.push(this.services.kartonan.buildNetAfterKartonFormula(`F${r}`, `G${r}`));
+      // Col F: Is Kartonan
+      rowFormulas.push(item.isKarton ? 'Y' : 'N');
+      // Col G: Gross Sales
+      rowFormulas.push(`=${sHarga}${r}*${sQty}${r}`);
+      // Col H: Diskon Karton
+      rowFormulas.push(this.services.kartonan.buildDiskonKartonFormula(`${sPlu}${r}`, `${sQty}${r}`, `${sIsKarton}${r}`));
+      // Col I: Net After Karton
+      rowFormulas.push(this.services.kartonan.buildNetAfterKartonFormula(`${sGross}${r}`, `${sKarton}${r}`));
 
       let lastNetCol = salesColMap.netKarton.letter;
 
@@ -495,7 +502,7 @@ class ResultSheetBuilder {
           const benefitRef = matchedRule.pctBenefit ? `D${matchedRule.resultRow}` : `E${matchedRule.resultRow}`;
 
           if (r === pkgFirstRow) {
-            rowFormulas.push(this.services.bundling.buildTotalDiscountFormula(matchedRule, benefitRef, `F${pkgFirstRow}:F${pkgLastRow}`));
+            rowFormulas.push(this.services.bundling.buildTotalDiscountFormula(matchedRule, benefitRef, `${sGross}${pkgFirstRow}:${sGross}${pkgLastRow}`));
           } else {
             rowFormulas.push(0);
           }
@@ -504,8 +511,8 @@ class ResultSheetBuilder {
           const prevRange = `${bundlingPluCol}${pkgFirstRow}:${bundlingPluCol}${r - 1}`;
           rowFormulas.push(this.services.bundling.buildProrateFormula(
             isLast,
-            `F${r}`,
-            `$F$${pkgFirstRow}:$F$${pkgLastRow}`,
+            `${sGross}${r}`,
+            `$${sGross}$${pkgFirstRow}:$${sGross}$${pkgLastRow}`,
             `$${bundlingTotalCol}$${pkgFirstRow}`,
             prevRange
           ));
@@ -524,7 +531,7 @@ class ResultSheetBuilder {
         const netPhgCol = salesColMap.netPhg.letter;
 
         if (item.isPHG()) {
-          rowFormulas.push(this.services.phg.buildSalesPHGFormula(`F${r}`));
+          rowFormulas.push(this.services.phg.buildSalesPHGFormula(`${sGross}${r}`));
           rowFormulas.push(`=${phgTotalCol}${r}`);
         } else {
           rowFormulas.push(0);
@@ -548,8 +555,8 @@ class ResultSheetBuilder {
           const benefitRef = matchedCoret.rpBenefit ? `E${matchedCoret.resultRow}` : `D${matchedCoret.resultRow}`;
           rowFormulas.push(this.services.hargaCoret.buildSalesFormula(
             matchedCoret,
-            `E${r}`,
-            `F${r}`,
+            `${sQty}${r}`,
+            `${sGross}${r}`,
             `C${matchedCoret.resultRow}`,
             benefitRef,
             `L${matchedCoret.resultRow}`
@@ -586,7 +593,7 @@ class ResultSheetBuilder {
           if (r === firstEligRow) {
             rowFormulas.push(this.services.upsell.buildCampurSalesTotalFormula(
               up,
-              `E${firstEligRow}:E${lastEligRow}`,
+              `${sQty}${firstEligRow}:${sQty}${lastEligRow}`,
               `${lastNetCol}${firstEligRow}:${lastNetCol}${lastEligRow}`,
               `C${up.resultRow}`,
               benefitRef,
@@ -615,7 +622,7 @@ class ResultSheetBuilder {
           if (isEligible) {
             rowFormulas.push(this.services.upsell.buildNonCampurSalesTotalFormula(
               up,
-              `E${r}`,
+              `${sQty}${r}`,
               `${lastNetCol}${r}`,
               `C${up.resultRow}`,
               benefitRef,
@@ -633,6 +640,11 @@ class ResultSheetBuilder {
       }
 
       // 5. Fair Potal (Hanya untuk baris Non-Paket & Bundling yang PLU-nya terdaftar di Fair Potal)
+      // Di Result Refference, setiap Fair Potal menghitung kelayakan dan prorata dari Net Sales After Upsell terakhir
+      const netAfterUpsellSalesCol = promoColsDef.upsell.length > 0
+        ? salesColMap.upsell[promoColsDef.upsell[promoColsDef.upsell.length - 1].code].net.letter
+        : lastNetCol;
+
       for (const pot of promoColsDef.fairPotal) {
         const potCols = salesColMap.fairPotal[pot.code];
         const potTotalCol = potCols.total.letter;
@@ -651,7 +663,7 @@ class ResultSheetBuilder {
         const benefitRef = pot.rpBenefit ? `E${pot.resultRow}` : `D${pot.resultRow}`;
 
         if (r === firstEligRow) {
-          const eligSum = `SUM(${eligRows.map(idx => `${lastNetCol}${idx}`).join(',')})`;
+          const eligSum = `SUM(${eligRows.map(idx => `${netAfterUpsellSalesCol}${idx}`).join(',')})`;
           rowFormulas.push(this.services.fairPotal.buildSalesTotalFormula(
             pot,
             eligSum,
@@ -667,11 +679,11 @@ class ResultSheetBuilder {
           const isBalancing = (r === firstEligRow);
           const otherEligRows = eligRows.filter(idx => idx !== firstEligRow);
           const balancingRange = otherEligRows.map(idx => `${potPluCol}${idx}`).join(',');
-          const eligSumAbs = `SUM(${eligRows.map(idx => `$${lastNetCol}$${idx}`).join(',')})`;
+          const eligSumAbs = `SUM(${eligRows.map(idx => `$${netAfterUpsellSalesCol}$${idx}`).join(',')})`;
 
           rowFormulas.push(this.services.fairPotal.buildProrateFormula(
             isBalancing,
-            `${lastNetCol}${r}`,
+            `${netAfterUpsellSalesCol}${r}`,
             eligSumAbs,
             `$${potTotalCol}$${firstEligRow}`,
             balancingRange,
@@ -692,11 +704,11 @@ class ResultSheetBuilder {
         const netTmhCol = salesColMap.netTmh.letter;
 
         if (item.isFairHadiah()) {
-          rowFormulas.push(this.services.fairHadiah.buildSalesFormula(`F${r}`));
+          rowFormulas.push(this.services.fairHadiah.buildSalesFormula(`${sGross}${r}`));
           rowFormulas.push(`=${tmhTotalCol}${r}`);
         } else if (item.isFairTMH()) {
           const matchedTmh = promoColsDef.fairTmh.find(t => item.packet.includes(t.code) || t.getTargetItemList().includes(item.plu)) || promoColsDef.fairTmh[0];
-          rowFormulas.push(this.services.fairTMH.buildSalesFormula(`E${matchedTmh.resultRow}`, `E${r}`, `${lastNetCol}${r}`));
+          rowFormulas.push(this.services.fairTMH.buildSalesFormula(`E${matchedTmh.resultRow}`, `${sQty}${r}`, `${lastNetCol}${r}`));
           rowFormulas.push(`=${tmhTotalCol}${r}`);
         } else {
           rowFormulas.push(0);
@@ -712,12 +724,16 @@ class ResultSheetBuilder {
         const dabTotalCol = dabCols.total.letter;
         const dabPluCol = dabCols.plu.letter;
         const netDabCol = dabCols.net.letter;
+        const isRpDab = Boolean(d.rpBenefit);
+        const dabBenefitRef = isRpDab ? `E${d.resultRow}` : `D${d.resultRow}`;
 
         if (r === startRow) {
           rowFormulas.push(this.services.dab.buildSalesTotalFormula(
             `SUM(${lastNetCol}${startRow}:${lastNetCol}${endRow})`,
             `L${d.resultRow}`,
-            `D${d.resultRow}`
+            dabBenefitRef,
+            `C${d.resultRow}`,
+            isRpDab
           ));
         } else {
           rowFormulas.push(0);
@@ -800,7 +816,7 @@ class ResultSheetBuilder {
             }
             if (eligRows.length > 0 && r === eligRows[0]) {
               rowFormulas.push(this.services.pointStamp.buildBaseCampurSalesFormula(
-                `E${eligRows[0]}:E${eligRows[eligRows.length - 1]}`,
+                `${sQty}${eligRows[0]}:${sQty}${eligRows[eligRows.length - 1]}`,
                 `C${pt.resultRow}`,
                 `F${pt.resultRow}`,
                 `L${pt.resultRow}`
@@ -811,7 +827,7 @@ class ResultSheetBuilder {
           } else {
             if (item.isNonPaket() && pt.getPluSyaratList().includes(item.plu)) {
               rowFormulas.push(this.services.pointStamp.buildBaseNonCampurSalesFormula(
-                `E${r}`,
+                `${sQty}${r}`,
                 `C${pt.resultRow}`,
                 `F${pt.resultRow}`,
                 `L${pt.resultRow}`
@@ -867,7 +883,7 @@ class ResultSheetBuilder {
             }
             if (eligRows.length > 0 && r === eligRows[0]) {
               rowFormulas.push(this.services.pointStamp.buildBaseCampurSalesFormula(
-                `E${eligRows[0]}:E${eligRows[eligRows.length - 1]}`,
+                `${sQty}${eligRows[0]}:${sQty}${eligRows[eligRows.length - 1]}`,
                 `C${st.resultRow}`,
                 `F${st.resultRow}`,
                 `L${st.resultRow}`
@@ -878,7 +894,7 @@ class ResultSheetBuilder {
           } else {
             if (item.isNonPaket() && st.getPluSyaratList().includes(item.plu)) {
               rowFormulas.push(this.services.pointStamp.buildBaseNonCampurSalesFormula(
-                `E${r}`,
+                `${sQty}${r}`,
                 `C${st.resultRow}`,
                 `F${st.resultRow}`,
                 `L${st.resultRow}`
@@ -1014,19 +1030,27 @@ class ResultSheetBuilder {
         lastShownPacket = item.packet;
       }
 
-      // Col A: Paket, Col B: PLU (=B70), Col C: Judul (=C70), Col D: Harga (=D70), Col E: Qty (=E70), Col F: Qty Aktual
+      const fPlu = fulfillColMap.plu.letter;
+      const fHarga = fulfillColMap.harga.letter;
+      const fQtyAktual = fulfillColMap.qtyAktual.letter;
+      const fIsKarton = fulfillColMap.isKarton.letter;
+      const fGross = fulfillColMap.gross.letter;
+      const fKarton = fulfillColMap.karton.letter;
+
+      // Col A: Paket, Col B: PLU, Col C: Judul, Col D: Harga, Col E: Qty, Col F: Qty Aktual, Col G: Is Kartonan
       rowFormulas.push(pktLabel);
-      rowFormulas.push(`=B${sr}`);
-      rowFormulas.push(`=C${sr}`);
-      rowFormulas.push(`=D${sr}`);
-      rowFormulas.push(`=E${sr}`);
+      rowFormulas.push(`=${salesColMap.plu.letter}${sr}`);
+      rowFormulas.push(`=${salesColMap.judul.letter}${sr}`);
+      rowFormulas.push(`=${salesColMap.harga.letter}${sr}`);
+      rowFormulas.push(`=${salesColMap.qty.letter}${sr}`);
       rowFormulas.push(item.qtyAktual);
-      // Col G: Gross Sales (=D114*F114)
-      rowFormulas.push(`=D${fr}*F${fr}`);
-      // Col H: Diskon Karton
-      rowFormulas.push(this.services.kartonan.buildDiskonKartonFormula(`B${fr}`, `F${fr}`, item.isKarton));
-      // Col I: Net Sales After Karton (=G114-H114)
-      rowFormulas.push(this.services.kartonan.buildNetAfterKartonFormula(`G${fr}`, `H${fr}`));
+      rowFormulas.push(`=${salesColMap.isKarton.letter}${sr}`);
+      // Col H: Gross Sales (=D114*F114)
+      rowFormulas.push(`=${fHarga}${fr}*${fQtyAktual}${fr}`);
+      // Col I: Diskon Karton
+      rowFormulas.push(this.services.kartonan.buildDiskonKartonFormula(`${fPlu}${fr}`, `${fQtyAktual}${fr}`, `${fIsKarton}${fr}`));
+      // Col J: Net Sales After Karton (=H114-I114)
+      rowFormulas.push(this.services.kartonan.buildNetAfterKartonFormula(`${fGross}${fr}`, `${fKarton}${fr}`));
 
       let lastNetCol = fulfillColMap.netKarton.letter;
 
@@ -1037,9 +1061,9 @@ class ResultSheetBuilder {
         const fNetBundlingCol = fulfillColMap.netBundling.letter;
 
         if (item.isBundling()) {
-          rowFormulas.push(this.services.bundling.buildFulfillmentBundlingFormula(`F${fr}`, `E${sr}`, `${sBundlingPluCol}${sr}`, true));
+          rowFormulas.push(this.services.bundling.buildFulfillmentBundlingFormula(`${fQtyAktual}${fr}`, `${salesColMap.qty.letter}${sr}`, `${sBundlingPluCol}${sr}`, true));
         } else if (item.isNonPaket()) {
-          rowFormulas.push(this.services.bundling.buildFulfillmentBundlingFormula(`F${fr}`, `E${sr}`, `${sBundlingPluCol}${sr}`, false));
+          rowFormulas.push(this.services.bundling.buildFulfillmentBundlingFormula(`${fQtyAktual}${fr}`, `${salesColMap.qty.letter}${sr}`, `${sBundlingPluCol}${sr}`, false));
         } else {
           rowFormulas.push(0);
         }
@@ -1054,9 +1078,9 @@ class ResultSheetBuilder {
         const fNetPhgCol = fulfillColMap.netPhg.letter;
 
         if (item.isPHG()) {
-          rowFormulas.push(this.services.phg.buildFulfillmentPHGFormula(`G${fr}`, `${sPhgPluCol}${sr}`, true));
+          rowFormulas.push(this.services.phg.buildFulfillmentPHGFormula(`${fGross}${fr}`, `${sPhgPluCol}${sr}`, true));
         } else if (item.isEligibleForFairPotal()) {
-          rowFormulas.push(this.services.phg.buildFulfillmentPHGFormula(`G${fr}`, `${sPhgPluCol}${sr}`, false));
+          rowFormulas.push(this.services.phg.buildFulfillmentPHGFormula(`${fGross}${fr}`, `${sPhgPluCol}${sr}`, false));
         } else {
           rowFormulas.push(0);
         }
@@ -1077,12 +1101,12 @@ class ResultSheetBuilder {
         if (matchedCoret) {
           const benefitRef = matchedCoret.rpBenefit ? `E${matchedCoret.resultRow}` : `D${matchedCoret.resultRow}`;
           rowFormulas.push(this.services.hargaCoret.buildFulfillmentFormula(
-            matchedCoret, `F${fr}`, `G${fr}`, `C${matchedCoret.resultRow}`, benefitRef, `L${matchedCoret.resultRow}`
+            matchedCoret, `${fQtyAktual}${fr}`, `${fGross}${fr}`, `C${matchedCoret.resultRow}`, benefitRef, `L${matchedCoret.resultRow}`
           ));
         } else if (item.isNonPaket() || item.isFairTMH()) {
-          rowFormulas.push(this.services.hargaCoret.buildFulfillmentProportionalFormula(`F${fr}`, `${sCoretPluCol}${sr}`, `E${sr}`, false));
+          rowFormulas.push(this.services.hargaCoret.buildFulfillmentProportionalFormula(`${fQtyAktual}${fr}`, `${sCoretPluCol}${sr}`, `${salesColMap.qty.letter}${sr}`, false));
         } else if (item.isBundling()) {
-          rowFormulas.push(this.services.hargaCoret.buildFulfillmentProportionalFormula(`F${fr}`, `${sCoretPluCol}${sr}`, `E${sr}`, true));
+          rowFormulas.push(this.services.hargaCoret.buildFulfillmentProportionalFormula(`${fQtyAktual}${fr}`, `${sCoretPluCol}${sr}`, `${salesColMap.qty.letter}${sr}`, true));
         } else {
           rowFormulas.push(0);
         }
@@ -1465,19 +1489,26 @@ class ResultSheetBuilder {
         lastShownPacket = item.packet;
       }
 
-      // Col A: Paket, Col B: PLU, Col C: Judul, Col D: Harga, Col E: Qty, Col F: Qty Refund
+      const rHarga = refundColMap.harga.letter;
+      const rQty = refundColMap.qty.letter;
+      const rQtyRefund = refundColMap.qtyRefund.letter;
+      const rGross = refundColMap.gross.letter;
+      const rKarton = refundColMap.karton.letter;
+
+      // Col A: Paket, Col B: PLU, Col C: Judul, Col D: Harga, Col E: Qty, Col F: Qty Refund, Col G: Is Kartonan
       rowFormulas.push(pktLabel);
-      rowFormulas.push(`=B${sr}`);
-      rowFormulas.push(`=C${sr}`);
-      rowFormulas.push(`=D${sr}`);
-      rowFormulas.push(`=E${sr}`);
-      rowFormulas.push(`=E${rr}-F${fr}`);
-      // Col G: Gross Sales (=D137*F137)
-      rowFormulas.push(`=D${rr}*F${rr}`);
-      // Col H: Diskon Karton (=G70-H114)
+      rowFormulas.push(`=${salesColMap.plu.letter}${sr}`);
+      rowFormulas.push(`=${salesColMap.judul.letter}${sr}`);
+      rowFormulas.push(`=${salesColMap.harga.letter}${sr}`);
+      rowFormulas.push(`=${salesColMap.qty.letter}${sr}`);
+      rowFormulas.push(`=${rQty}${rr}-${fulfillColMap.qtyAktual.letter}${fr}`);
+      rowFormulas.push(`=${salesColMap.isKarton.letter}${sr}`);
+      // Col H: Gross Sales (=D137*F137)
+      rowFormulas.push(`=${rHarga}${rr}*${rQtyRefund}${rr}`);
+      // Col I: Diskon Karton (=H70-I114)
       rowFormulas.push(this.services.kartonan.buildRefundKartonFormula(`${salesColMap.karton.letter}${sr}`, `${fulfillColMap.karton.letter}${fr}`));
-      // Col I: Net Sales After Karton (=G137-H137)
-      rowFormulas.push(this.services.kartonan.buildNetAfterKartonFormula(`G${rr}`, `H${rr}`));
+      // Col J: Net Sales After Karton (=H137-I137)
+      rowFormulas.push(this.services.kartonan.buildNetAfterKartonFormula(`${rGross}${rr}`, `${rKarton}${rr}`));
 
       let lastNetCol = refundColMap.netKarton.letter;
 
@@ -1847,15 +1878,15 @@ class ResultSheetBuilder {
     const refundLastNetLetter = refundColMap.finalNet.letter;
     const refundLastColLetter = ResultSheetBuilder.getColLetter(refundNumCols);
 
-    // Format mata uang pada kolom harga dan sales s/d Net Sales terakhir
-    sheet.getRange(`D${salesStart}:D${salesEnd}`).setNumberFormat(moneyFormat);
-    sheet.getRange(`F${salesStart}:${salesLastNetLetter}${salesEnd + 1}`).setNumberFormat(moneyFormat);
+    // Format mata uang pada kolom harga dan sales s/d Net Sales terakhir (tidak termasuk kolom teks 'Is Kartonan')
+    sheet.getRange(`${salesColMap.harga.letter}${salesStart}:${salesColMap.harga.letter}${salesEnd}`).setNumberFormat(moneyFormat);
+    sheet.getRange(`${salesColMap.gross.letter}${salesStart}:${salesLastNetLetter}${salesEnd + 1}`).setNumberFormat(moneyFormat);
 
-    sheet.getRange(`D${fulfillStart}:D${fulfillEnd}`).setNumberFormat(moneyFormat);
-    sheet.getRange(`G${fulfillStart}:${fulfillLastNetLetter}${fulfillEnd + 1}`).setNumberFormat(moneyFormat);
+    sheet.getRange(`${fulfillColMap.harga.letter}${fulfillStart}:${fulfillColMap.harga.letter}${fulfillEnd}`).setNumberFormat(moneyFormat);
+    sheet.getRange(`${fulfillColMap.gross.letter}${fulfillStart}:${fulfillLastNetLetter}${fulfillEnd + 1}`).setNumberFormat(moneyFormat);
 
-    sheet.getRange(`D${refundStart}:D${refundEnd}`).setNumberFormat(moneyFormat);
-    sheet.getRange(`G${refundStart}:${refundLastNetLetter}${refundEnd + 1}`).setNumberFormat(moneyFormat);
+    sheet.getRange(`${refundColMap.harga.letter}${refundStart}:${refundColMap.harga.letter}${refundEnd}`).setNumberFormat(moneyFormat);
+    sheet.getRange(`${refundColMap.gross.letter}${refundStart}:${refundLastNetLetter}${refundEnd + 1}`).setNumberFormat(moneyFormat);
 
     // Format angka pada kolom Point & Stamp
     if (salesNumCols > salesColMap.finalNet.idx) {

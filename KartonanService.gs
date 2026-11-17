@@ -10,14 +10,17 @@ class KartonanService {
    * Menghasilkan formula diskon karton untuk suatu baris transaksi.
    * @param {string} pluCell - Contoh 'B70'
    * @param {string} qtyCell - Contoh 'E70'
-   * @param {boolean} isKarton - Apakah item ini berstatus kartonan
-   * @returns {string} Formula atau angka '=0'
+   * @param {string|boolean} isKartonCellOrBool - Referensi sel 'Is Kartonan' (misal 'F70') atau boolean
+   * @returns {string} Formula atau '=0'
    */
-  buildDiskonKartonFormula(pluCell, qtyCell, isKarton) {
-    if (!isKarton) {
+  buildDiskonKartonFormula(pluCell, qtyCell, isKartonCellOrBool) {
+    // FRAC_KRT ada di kolom E (indeks 4 dari B), Diskon Karton (Benefit Rp = (Harga*FRAC_KRT)-PRICE_KRT) ada di kolom H (indeks 7 dari B)
+    if (typeof isKartonCellOrBool === 'string') {
+      return `=IF(${isKartonCellOrBool}="Y",IFERROR(ROUNDDOWN(${qtyCell}/VLOOKUP(${pluCell},'PLU Master'!$B:$E,4,FALSE),0)*VLOOKUP(${pluCell},'PLU Master'!$B:$H,7,FALSE),0),0)`;
+    }
+    if (!isKartonCellOrBool) {
       return '=0';
     }
-    // FRAC_KRT ada di kolom E (indeks 4 dari B), Diskon Karton (Benefit Rp) ada di kolom H (indeks 7 dari B)
     return `=IFERROR(ROUNDDOWN(${qtyCell}/VLOOKUP(${pluCell},'PLU Master'!$B:$E,4,FALSE),0)*VLOOKUP(${pluCell},'PLU Master'!$B:$H,7,FALSE),0)`;
   }
 
