@@ -95,7 +95,7 @@ class InputTemplateBuilder {
     const txStartRow = 3 + promoTotalRows + 2;
     sheet.getRange(txStartRow, 2).setValue("TRANSACTION & REFUND INPUT").setFontWeight("bold").setFontSize(11);
 
-    const txHeaders = ["Paket", "PLU", "Qty Beli", "Qty Aktual", "Kartonan Only"];
+    const txHeaders = ["Paket", "PLU", "Qty Beli", "Qty Aktual", "is kartonan"];
     sheet.getRange(txStartRow + 2, 2, 1, txHeaders.length)
       .setValues([txHeaders])
       .setBackground("#6AA84F")
@@ -128,7 +128,7 @@ class InputTemplateBuilder {
     // Format Qty Beli & Qty Aktual
     sheet.getRange(txStartRow + 3, 4, txTotalRows, 2).setNumberFormat("#,##0");
 
-    // Terapkan Dropdown (Data Validation) untuk Kartonan Only
+    // Terapkan Dropdown (Data Validation) untuk is kartonan
     this.applyDropdown(sheet.getRange(txStartRow + 3, 6, txTotalRows, 1), ["Y", "N"]);
 
     // Border grid
