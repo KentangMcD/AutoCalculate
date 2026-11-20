@@ -108,15 +108,18 @@ class MockSheet {
 class MockSpreadsheet {
   constructor() {
     this.sheets = new Map();
+    this.activeSheet = null;
   }
   getSheetByName(name) { return this.sheets.get(name) || null; }
   insertSheet(name) {
     const s = new MockSheet(name);
     this.sheets.set(name, s);
+    this.activeSheet = s;
     return s;
   }
   getSheets() { return Array.from(this.sheets.values()); }
-  setActiveSheet() {}
+  setActiveSheet(s) { this.activeSheet = s; }
+  getActiveSheet() { return this.activeSheet; }
 }
 
 global.SpreadsheetApp = {

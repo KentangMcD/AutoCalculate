@@ -10,15 +10,30 @@ class InputTemplateBuilder {
   }
 
   /**
-   * Membuat atau menimpa tab 'Input' dengan format dan data contoh yang siap pakai.
+   * Menentukan nama tab Input baru secara bertingkat ('Input - 1', 'Input - 2', dst.).
+   */
+  getNextInputSheetName() {
+    const sheets = this.ss.getSheets ? this.ss.getSheets() : [];
+    let maxNum = 0;
+    const regex = /^Input\s*-\s*(\d+)$/i;
+
+    for (const sheet of sheets) {
+      const name = sheet.getName();
+      const match = name.match(regex);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (num > maxNum) maxNum = num;
+      }
+    }
+    return `Input - ${maxNum + 1}`;
+  }
+
+  /**
+   * Membuat tab Input baru ('Input - 1', 'Input - 2', dst.) dengan format dan data contoh yang siap pakai.
    */
   generateInputSheet() {
-    let sheet = this.ss.getSheetByName("Input");
-    if (!sheet) {
-      sheet = this.ss.insertSheet("Input");
-    } else {
-      sheet.clear();
-    }
+    const newSheetName = this.getNextInputSheetName();
+    const sheet = this.ss.insertSheet(newSheetName);
 
     // 1. Bagian Atas: KODE PROMOSI INPUT
     sheet.getRange("A1").setValue("KODE PROMOSI INPUT").setFontWeight("bold").setFontSize(11);
@@ -131,10 +146,10 @@ class InputTemplateBuilder {
     // Terapkan Dropdown (Data Validation) untuk is kartonan
     this.applyDropdown(sheet.getRange(txStartRow + 3, 6, txTotalRows, 1), ["Y", "N"]);
 
-    // Border grid
+    // Border grid hitam solid agar jelas pada tab Input
     const borderStyle = (typeof SpreadsheetApp !== 'undefined' && SpreadsheetApp.BorderStyle) ? SpreadsheetApp.BorderStyle.SOLID : null;
-    sheet.getRange(2, 1, promoTotalRows + 1, promoHeaders.length).setBorder(true, true, true, true, true, true, "#D3D3D3", borderStyle);
-    sheet.getRange(txStartRow + 2, 2, txTotalRows + 1, txHeaders.length).setBorder(true, true, true, true, true, true, "#D3D3D3", borderStyle);
+    sheet.getRange(2, 1, promoTotalRows + 1, promoHeaders.length).setBorder(true, true, true, true, true, true, "#000000", borderStyle);
+    sheet.getRange(txStartRow + 2, 2, txTotalRows + 1, txHeaders.length).setBorder(true, true, true, true, true, true, "#000000", borderStyle);
 
     // Auto-fit kolom
     for (let c = 1; c <= promoHeaders.length; c++) {
@@ -211,7 +226,7 @@ class InputTemplateBuilder {
     sheet.getRange(2, 9, sampleProducts.length, 1).setNumberFormat("0.00%");   // Benefit %
 
     const borderStyle = (typeof SpreadsheetApp !== 'undefined' && SpreadsheetApp.BorderStyle) ? SpreadsheetApp.BorderStyle.SOLID : null;
-    sheet.getRange(1, 1, sampleProducts.length + 1, headers.length).setBorder(true, true, true, true, true, true, "#D3D3D3", borderStyle);
+    sheet.getRange(1, 1, sampleProducts.length + 1, headers.length).setBorder(true, true, true, true, true, true, "#000000", borderStyle);
 
     for (let c = 1; c <= headers.length; c++) {
       sheet.autoResizeColumn(c);

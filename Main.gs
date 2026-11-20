@@ -5,12 +5,9 @@
 
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
-  ui.createMenu("Simulasi Promo & Refund")
-    .addItem("1. Hitung & Buat Tab Result Baru", "calculateAndGenerateResult")
-    .addItem("2. Auto-Distribusi Qty Stok ke Input", "autoDistributeQtyToInput")
-    .addSeparator()
-    .addItem("3. Generate Template Tab Input", "generateInputTemplate")
-    .addItem("4. Generate Template Tab PLU Master", "generatePluMasterTemplate")
+  ui.createMenu("🌟 Simulasi Promo & Refund 🌟")
+    .addItem("🧮 Hitung & Buat Tab Result Baru", "calculateAndGenerateResult")
+    .addItem("🖨️ Generate Template Tab Input", "generateInputTemplate")
     .addToUi();
 }
 
@@ -39,8 +36,9 @@ function calculateAndGenerateResult() {
       distribution: new QtyDistributionService()
     };
 
-    // 2. Muat dan Validasi Data
-    const loader = new DataLoader(ss);
+    // 2. Muat dan Validasi Data dari tab aktif yang sedang dibuka user
+    const activeSheet = ss.getActiveSheet ? ss.getActiveSheet() : null;
+    const loader = new DataLoader(ss, activeSheet);
     const { productsMap, promoRules, transactions } = loader.loadAll();
 
     // 3. Bangun Ringkasan Edit Order per PLU
@@ -69,14 +67,15 @@ function calculateAndGenerateResult() {
 }
 
 /**
- * Helper opsional: Mendistribusikan total Qty Aktual ke kolom Qty Aktual pada tab 'Input'
+ * Helper opsional: Mendistribusikan total Qty Aktual ke kolom Qty Aktual pada tab Input aktif
  */
 function autoDistributeQtyToInput() {
   const ui = SpreadsheetApp.getUi();
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
   try {
-    const loader = new DataLoader(ss);
+    const activeSheet = ss.getActiveSheet ? ss.getActiveSheet() : null;
+    const loader = new DataLoader(ss, activeSheet);
     const { productsMap, transactions } = loader.loadAll();
     const distributionService = new QtyDistributionService();
 
@@ -89,8 +88,11 @@ function autoDistributeQtyToInput() {
       }
     }
 
-    // Tanyakan prompt stok kepada user jika ingin menyesuaikan
-    const inputSheet = ss.getSheetByName("Input");
+    // Ambil sheet Input yang sedang aktif
+    const inputSheet = loader.resolveInputSheet();
+    if (!inputSheet) {
+      throw new Error("Tab Input tidak ditemukan.");
+    }
     const lastRow = inputSheet.getLastRow();
     const data = inputSheet.getRange(1, 1, lastRow, 10).getValues();
 
@@ -141,19 +143,11 @@ function autoDistributeQtyToInput() {
 }
 
 /**
- * Menu Action: Membuat atau menimpa template tab 'Input' dengan format dan data siap pakai.
+ * Menu Action: Membuat tab Input baru ('Input - 1', 'Input - 2', dst.) dengan format dan data siap pakai.
  */
 function generateInputTemplate() {
   const ui = SpreadsheetApp.getUi();
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-
-  const response = ui.alert(
-    "Konfirmasi Generate Template Input",
-    "Apakah Anda yakin ingin membuat/mereset tab 'Input'?\n\nJika tab 'Input' sudah ada, isinya akan ditimpa dengan format dan contoh data baru.",
-    ui.ButtonSet.YES_NO
-  );
-
-  if (response !== ui.Button.YES) return;
 
   try {
     const builder = new InputTemplateBuilder(ss);
@@ -162,7 +156,7 @@ function generateInputTemplate() {
 
     ui.alert(
       "Berhasil",
-      "Template tab 'Input' telah berhasil dibuat dengan format dan data contoh yang siap digunakan.",
+      `Tab input baru '${sheet.getName()}' telah berhasil dibuat dengan format dan data contoh yang siap digunakan.`,
       ui.ButtonSet.OK
     );
   } catch (err) {

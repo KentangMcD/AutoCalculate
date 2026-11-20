@@ -95,11 +95,13 @@ class ResultSheetBuilder {
 
     // 5. Bangun Tabel SALES (Order Awal)
     sheet.getRange(salesHeaderRow - 1, 1).setValue("SALES").setFontWeight("bold");
-    sheet.getRange(salesHeaderRow, 1, 1, salesCols.length)
-      .setValues([salesCols])
-      .setBackground("#4A86E8")
-      .setFontColor("#FFFFFF")
-      .setFontWeight("bold");
+    this.applyHeaderAlignment(
+      sheet.getRange(salesHeaderRow, 1, 1, salesCols.length)
+        .setValues([salesCols])
+        .setBackground("#4A86E8")
+        .setFontColor("#FFFFFF")
+        .setFontWeight("bold")
+    );
 
     const salesDataFormulas = this.buildSalesFormulas(
       transactions, promoColsDef, salesColMap, salesStartRow, salesEndRow, `B${detail1PackagingRow}`
@@ -129,11 +131,13 @@ class ResultSheetBuilder {
 
     // 8. Bangun Tabel FULFILLMENT SALES
     sheet.getRange(fulfillHeaderRow - 1, 1).setValue("FULFILLMENT SALES").setFontWeight("bold");
-    sheet.getRange(fulfillHeaderRow, 1, 1, fulfillCols.length)
-      .setValues([fulfillCols])
-      .setBackground("#6AA84F")
-      .setFontColor("#FFFFFF")
-      .setFontWeight("bold");
+    this.applyHeaderAlignment(
+      sheet.getRange(fulfillHeaderRow, 1, 1, fulfillCols.length)
+        .setValues([fulfillCols])
+        .setBackground("#6AA84F")
+        .setFontColor("#FFFFFF")
+        .setFontWeight("bold")
+    );
 
     const fulfillDataFormulas = this.buildFulfillmentFormulas(
       transactions, promoColsDef, salesColMap, fulfillColMap, fulfillStartRow, fulfillEndRow, salesStartRow, salesEndRow, `B${detail1PackagingRow}`
@@ -143,11 +147,13 @@ class ResultSheetBuilder {
 
     // 9. Bangun Tabel REFUND
     sheet.getRange(refundHeaderRow - 1, 1).setValue("REFUND").setFontWeight("bold");
-    sheet.getRange(refundHeaderRow, 1, 1, refundCols.length)
-      .setValues([refundCols])
-      .setBackground("#CC0000")
-      .setFontColor("#FFFFFF")
-      .setFontWeight("bold");
+    this.applyHeaderAlignment(
+      sheet.getRange(refundHeaderRow, 1, 1, refundCols.length)
+        .setValues([refundCols])
+        .setBackground("#CC0000")
+        .setFontColor("#FFFFFF")
+        .setFontWeight("bold")
+    );
 
     const refundDataFormulas = this.buildRefundFormulas(
       transactions, promoColsDef, salesColMap, fulfillColMap, refundColMap, refundStartRow, refundEndRow, salesStartRow, fulfillStartRow
@@ -163,13 +169,25 @@ class ResultSheetBuilder {
 
     // 11. Format Tampilan (Borders & Number Formats)
     this.applyFormatting(
-      sheet, salesStartRow, salesEndRow, salesCols.length, salesColMap,
+      sheet, promoStartRow, currentPromoRow,
+      editOrderHeaderRow, editOrderEndRow,
+      salesStartRow, salesEndRow, salesCols.length, salesColMap,
       fulfillStartRow, fulfillEndRow, fulfillCols.length, fulfillColMap,
       refundStartRow, refundEndRow, refundCols.length, refundColMap,
-      detail1HeaderRow, detail2HeaderRow
+      detail1HeaderRow, detail2HeaderRow, transactions
     );
 
     return sheet;
+  }
+
+  /**
+   * Menerapkan wrap text, perataan horizontal center, dan perataan vertikal middle ke header 1 baris.
+   */
+  applyHeaderAlignment(range) {
+    if (range.setWrap) range.setWrap(true);
+    if (range.setHorizontalAlignment) range.setHorizontalAlignment("center");
+    if (range.setVerticalAlignment) range.setVerticalAlignment("middle");
+    return range;
   }
 
   /**
@@ -232,13 +250,19 @@ class ResultSheetBuilder {
 
     let currentPromoRow = promoStartRow + 1;
     let lastDisplayedType = '';
+    const typeGroups = [];
 
     for (const rule of sortedPromoRules) {
       rule.resultRow = currentPromoRow;
       const plus = rule.getPluSyaratList();
       const displayType = rule.getDisplayType();
-      const showType = displayType !== lastDisplayedType ? displayType : '';
+      const isNewTypeGroup = displayType !== lastDisplayedType;
+      const showType = isNewTypeGroup ? displayType : '';
       lastDisplayedType = displayType;
+
+      if (isNewTypeGroup) {
+        typeGroups.push({ type: displayType, startRow: currentPromoRow, endRow: currentPromoRow });
+      }
 
       const minVal = rule.getMekanismeBeli();
       const hasRpMin = minVal !== '-' && rule.qtyMin === null && rule.rpMin !== null;
@@ -304,6 +328,28 @@ class ResultSheetBuilder {
         currentPromoRow++;
       }
       rule.resultEndRow = currentPromoRow - 1;
+      typeGroups[typeGroups.length - 1].endRow = rule.resultEndRow;
+
+      // Merge cell kosong secara vertikal untuk promo dengan > 1 PLU syarat
+      if (pluRows.length > 1) {
+        const leftMerge = sheet.getRange(rule.resultRow, 2, pluRows.length, 6);
+        if (leftMerge.mergeVertically) leftMerge.mergeVertically();
+        const rightMerge = sheet.getRange(rule.resultRow, 10, pluRows.length, 3);
+        if (rightMerge.mergeVertically) rightMerge.mergeVertically();
+      }
+    }
+
+    // Merge kolom A (Tipe Promo) secara vertikal untuk kelompok Tipe Promo yang sama
+    for (const grp of typeGroups) {
+      if (grp.endRow > grp.startRow) {
+        const typeMerge = sheet.getRange(grp.startRow, 1, grp.endRow - grp.startRow + 1, 1);
+        if (typeMerge.mergeVertically) typeMerge.mergeVertically();
+      }
+    }
+
+    if (currentPromoRow > promoStartRow + 1) {
+      const promoDataRange = sheet.getRange(promoStartRow + 1, 1, currentPromoRow - (promoStartRow + 1), 12);
+      if (promoDataRange.setVerticalAlignment) promoDataRange.setVerticalAlignment("middle");
     }
 
     return currentPromoRow;
@@ -322,6 +368,46 @@ class ResultSheetBuilder {
       points: promoRules.filter(r => r.type.toLowerCase().includes('poin')),
       stamps: promoRules.filter(r => r.type.toLowerCase().includes('stamp'))
     };
+  }
+
+  /**
+   * Mencari aturan Harga Coret yang cocok untuk suatu baris transaksi beserta sel Qty
+   * dari baris prioritas lebih tinggi untuk menghitung sisa limitasi pemenuhan.
+   * Urutan prioritas limitasi: baris Non-Paket terlebih dahulu, lalu baris Fair Tebus Murah.
+   */
+  _getMatchedCoretAndPriorCells(item, rowIndex, transactions, coretRules, baseRow, qtyColLetter, allowFairTmh = true) {
+    const isItemAllowed = item.isNonPaket() || (allowFairTmh && item.isFairTMH());
+    if (!isItemAllowed) {
+      return { matchedCoret: null, priorQtyCells: [] };
+    }
+
+    const matchedCoret = coretRules.find(c => c.isAllPlu() || c.getPluSyaratList().includes(item.plu));
+    if (!matchedCoret) {
+      return { matchedCoret: null, priorQtyCells: [] };
+    }
+
+    const isRuleMatch = (tx) => {
+      if (!(matchedCoret.isAllPlu() || matchedCoret.getPluSyaratList().includes(tx.plu))) {
+        return false;
+      }
+      return matchedCoret.campur === 'Y' || tx.plu === item.plu;
+    };
+
+    const priorQtyCells = [];
+    for (let j = 0; j < transactions.length; j++) {
+      const tx = transactions[j];
+      if (!isRuleMatch(tx)) continue;
+
+      if (tx.isNonPaket()) {
+        if (item.isFairTMH() || j < rowIndex) {
+          priorQtyCells.push(`${qtyColLetter}${baseRow + j}`);
+        }
+      } else if (allowFairTmh && item.isFairTMH() && tx.isFairTMH() && j < rowIndex) {
+        priorQtyCells.push(`${qtyColLetter}${baseRow + j}`);
+      }
+    }
+
+    return { matchedCoret, priorQtyCells };
   }
 
   /**
@@ -541,15 +627,15 @@ class ResultSheetBuilder {
         lastNetCol = netPhgCol;
       }
 
-      // 3. Harga Coret (Hanya untuk baris Non-Paket yang PLU-nya terdaftar di Harga Coret)
+      // 3. Harga Coret (Untuk Non-Paket dan Fair Tebus Murah yang PLU-nya terdaftar di Harga Coret, prioritas limitasi Non-Paket dulu)
       if (promoColsDef.coret.length > 0) {
         const coretTotalCol = salesColMap.coretTotal.letter;
         const coretPluCol = salesColMap.coretPlu.letter;
         const netCoretCol = salesColMap.netCoret.letter;
 
-        const matchedCoret = item.isNonPaket()
-          ? promoColsDef.coret.find(c => c.getPluSyaratList().includes(item.plu))
-          : null;
+        const { matchedCoret, priorQtyCells } = this._getMatchedCoretAndPriorCells(
+          item, i, transactions, promoColsDef.coret, startRow, sQty, true
+        );
 
         if (matchedCoret) {
           const benefitRef = matchedCoret.rpBenefit ? `E${matchedCoret.resultRow}` : `D${matchedCoret.resultRow}`;
@@ -559,7 +645,8 @@ class ResultSheetBuilder {
             `${sGross}${r}`,
             `C${matchedCoret.resultRow}`,
             benefitRef,
-            `L${matchedCoret.resultRow}`
+            `L${matchedCoret.resultRow}`,
+            priorQtyCells
           ));
           rowFormulas.push(`=${coretTotalCol}${r}`);
         } else {
@@ -956,7 +1043,7 @@ class ResultSheetBuilder {
     }
     if (promoColsDef.coret.length > 0) {
       const col = salesColMap.coretPlu.letter;
-      baseDiscounts.push(`SUM(${col}${salesStartRow}:${col}${baseEndRow})`);
+      baseDiscounts.push(`SUM(${col}${salesStartRow}:${col}${salesEndRow})`);
     }
     for (const up of promoColsDef.upsell) {
       const col = salesColMap.upsell[up.code].plu.letter;
@@ -1094,14 +1181,14 @@ class ResultSheetBuilder {
         const fCoretPluCol = fulfillColMap.coretPlu.letter;
         const fNetCoretCol = fulfillColMap.netCoret.letter;
 
-        const matchedCoret = item.isNonPaket()
-          ? promoColsDef.coret.find(c => c.getPluSyaratList().includes(item.plu))
-          : null;
+        const { matchedCoret, priorQtyCells } = this._getMatchedCoretAndPriorCells(
+          item, i, transactions, promoColsDef.coret, fulfillStartRow, fQtyAktual, false
+        );
 
         if (matchedCoret) {
           const benefitRef = matchedCoret.rpBenefit ? `E${matchedCoret.resultRow}` : `D${matchedCoret.resultRow}`;
           rowFormulas.push(this.services.hargaCoret.buildFulfillmentFormula(
-            matchedCoret, `${fQtyAktual}${fr}`, `${fGross}${fr}`, `C${matchedCoret.resultRow}`, benefitRef, `L${matchedCoret.resultRow}`
+            matchedCoret, `${fQtyAktual}${fr}`, `${fGross}${fr}`, `C${matchedCoret.resultRow}`, benefitRef, `L${matchedCoret.resultRow}`, priorQtyCells
           ));
         } else if (item.isNonPaket() || item.isFairTMH()) {
           rowFormulas.push(this.services.hargaCoret.buildFulfillmentProportionalFormula(`${fQtyAktual}${fr}`, `${sCoretPluCol}${sr}`, `${salesColMap.qty.letter}${sr}`, false));
@@ -1769,8 +1856,8 @@ class ResultSheetBuilder {
       rBaseDiscounts.push(`SUM(${refundColMap.bundlingPlu.letter}${refundStartRow}:${refundColMap.bundlingPlu.letter}${rBaseEnd})`);
     }
     if (promoColsDef.coret.length > 0) {
-      fBaseDiscounts.push(`SUM(${fulfillColMap.coretPlu.letter}${fulfillStartRow}:${fulfillColMap.coretPlu.letter}${fBaseEnd})`);
-      rBaseDiscounts.push(`SUM(${refundColMap.coretPlu.letter}${refundStartRow}:${refundColMap.coretPlu.letter}${rBaseEnd})`);
+      fBaseDiscounts.push(`SUM(${fulfillColMap.coretPlu.letter}${fulfillStartRow}:${fulfillColMap.coretPlu.letter}${fulfillEndRow})`);
+      rBaseDiscounts.push(`SUM(${refundColMap.coretPlu.letter}${refundStartRow}:${refundColMap.coretPlu.letter}${refundEndRow})`);
     }
     for (const up of promoColsDef.upsell) {
       const fCol = fulfillColMap.upsell[up.code].plu.letter;
@@ -1863,10 +1950,12 @@ class ResultSheetBuilder {
   }
 
   applyFormatting(
-    sheet, salesStart, salesEnd, salesNumCols, salesColMap,
+    sheet, promoStartRow, currentPromoRow,
+    editOrderHeaderRow, editOrderEndRow,
+    salesStart, salesEnd, salesNumCols, salesColMap,
     fulfillStart, fulfillEnd, fulfillNumCols, fulfillColMap,
     refundStart, refundEnd, refundNumCols, refundColMap,
-    detail1Start, detail2Start
+    detail1Start, detail2Start, transactions
   ) {
     const moneyFormat = 'Rp#,##0';
     const numberFormat = '#,##0';
@@ -1906,11 +1995,65 @@ class ResultSheetBuilder {
     sheet.getRange(`B${detail1Start + 1}:B${detail1Start + 9}`).setNumberFormat(numberFormat);
     sheet.getRange(`B${detail2Start + 1}:B${detail2Start + 19}`).setNumberFormat(numberFormat);
 
-    // Border grid halus
+    // Border hitam solid untuk seluruh tabel pada tab Result
     const borderStyle = (typeof SpreadsheetApp !== 'undefined' && SpreadsheetApp.BorderStyle) ? SpreadsheetApp.BorderStyle.SOLID : null;
-    sheet.getRange(`A${salesStart - 1}:${salesLastColLetter}${salesEnd + 1}`).setBorder(true, true, true, true, true, true, "#D3D3D3", borderStyle);
-    sheet.getRange(`A${fulfillStart - 1}:${fulfillLastColLetter}${fulfillEnd + 1}`).setBorder(true, true, true, true, true, true, "#D3D3D3", borderStyle);
-    sheet.getRange(`A${refundStart - 1}:${refundLastColLetter}${refundEnd + 1}`).setBorder(true, true, true, true, true, true, "#D3D3D3", borderStyle);
+    if (currentPromoRow > promoStartRow) {
+      sheet.getRange(promoStartRow, 1, currentPromoRow - promoStartRow, 12).setBorder(true, true, true, true, true, true, "#000000", borderStyle);
+    }
+    sheet.getRange(`A${salesStart - 1}:${salesLastColLetter}${salesEnd + 1}`).setBorder(true, true, true, true, true, true, "#000000", borderStyle);
+    sheet.getRange(`A${editOrderHeaderRow}:E${editOrderEndRow}`).setBorder(true, true, true, true, true, true, "#000000", borderStyle);
+    sheet.getRange(`A${detail1Start + 1}:B${detail1Start + 9}`).setBorder(true, true, true, true, true, true, "#000000", borderStyle);
+    sheet.getRange(`A${fulfillStart - 1}:${fulfillLastColLetter}${fulfillEnd + 1}`).setBorder(true, true, true, true, true, true, "#000000", borderStyle);
+    sheet.getRange(`A${refundStart - 1}:${refundLastColLetter}${refundEnd + 1}`).setBorder(true, true, true, true, true, true, "#000000", borderStyle);
+    sheet.getRange(`A${detail2Start + 1}:B${detail2Start + 19}`).setBorder(true, true, true, true, true, true, "#000000", borderStyle);
+
+    // Pewarnaan fill color cell per kategori paket pada SALES, FULFILLMENT SALES, dan REFUND
+    if (transactions && transactions.length > 0) {
+      const salesBgs = [];
+      const fulfillBgs = [];
+      const refundBgs = [];
+
+      for (let i = 0; i < transactions.length; i++) {
+        const item = transactions[i];
+        let bgColor = null;
+        if (item.isBundling()) {
+          bgColor = "#03ecfc";
+        } else if (item.isPHG() || item.isFairHadiah() || item.isFairTMH()) {
+          bgColor = "#d9ead3";
+        } else if (item.isNonPaket()) {
+          bgColor = "#fff2cc";
+        }
+        salesBgs.push(Array(salesNumCols).fill(bgColor));
+        fulfillBgs.push(Array(fulfillNumCols).fill(bgColor));
+        refundBgs.push(Array(refundNumCols).fill(bgColor));
+      }
+
+      const salesRange = sheet.getRange(salesStart, 1, transactions.length, salesNumCols);
+      const fulfillRange = sheet.getRange(fulfillStart, 1, transactions.length, fulfillNumCols);
+      const refundRange = sheet.getRange(refundStart, 1, transactions.length, refundNumCols);
+
+      if (salesRange.setBackgrounds) {
+        salesRange.setBackgrounds(salesBgs);
+        fulfillRange.setBackgrounds(fulfillBgs);
+        refundRange.setBackgrounds(refundBgs);
+      } else {
+        for (let i = 0; i < transactions.length; i++) {
+          const bgColor = salesBgs[i][0];
+          if (bgColor) {
+            sheet.getRange(salesStart + i, 1, 1, salesNumCols).setBackground(bgColor);
+            sheet.getRange(fulfillStart + i, 1, 1, fulfillNumCols).setBackground(bgColor);
+            sheet.getRange(refundStart + i, 1, 1, refundNumCols).setBackground(bgColor);
+          }
+        }
+      }
+    }
+
+    // Atur lebar kolom agar teks panjang (khususnya Kolom I Nama Produk) tidak terpotong
+    if (sheet.setColumnWidth) {
+      sheet.setColumnWidth(1, 180); // Kolom A: Tipe Promo / Paket / Detail Transaksi
+      sheet.setColumnWidth(3, 200); // Kolom C: Judul Produk (SALES / FULFILLMENT / REFUND)
+      sheet.setColumnWidth(9, 250); // Kolom I: Nama Produk pada Tabel Tipe Promo (lebih lebar agar tidak terpotong)
+    }
   }
 }
 

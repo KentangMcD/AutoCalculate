@@ -4,11 +4,34 @@
  */
 
 class DataLoader {
-  constructor(spreadsheet) {
+  constructor(spreadsheet, inputSheet = null) {
     this.ss = spreadsheet || SpreadsheetApp.getActiveSpreadsheet();
+    this.inputSheet = inputSheet;
+    this.inputSheetName = 'Input';
     this.productsMap = new Map();
     this.promoRules = [];
     this.transactions = [];
+  }
+
+  /**
+   * Menentukan sheet Input yang digunakan (prioritas: parameter eksplisit -> sheet aktif yang dibuka user -> fallback 'Input').
+   */
+  resolveInputSheet() {
+    if (this.inputSheet) {
+      return this.inputSheet;
+    }
+    if (this.ss.getActiveSheet) {
+      const active = this.ss.getActiveSheet();
+      if (active) return active;
+    }
+    const legacy = this.ss.getSheetByName('Input');
+    if (legacy) return legacy;
+
+    if (this.ss.getSheets) {
+      const inputSheets = this.ss.getSheets().filter(s => /^Input(\s*-\s*\d+)?$/i.test(s.getName()));
+      if (inputSheets.length > 0) return inputSheets[inputSheets.length - 1];
+    }
+    return null;
   }
 
   loadAll() {
@@ -56,15 +79,21 @@ class DataLoader {
   }
 
   loadInputSheet() {
-    const sheet = this.ss.getSheetByName('Input');
+    const sheet = this.resolveInputSheet();
     if (!sheet) {
-      throw new Error("Tab 'Input' tidak ditemukan di spreadsheet.");
+      throw new Error("Tab Input tidak ditemukan. Silakan buka tab Input yang ingin dihitung.");
     }
+
+    const sheetName = sheet.getName ? sheet.getName() : 'Input';
+    if (sheetName.toLowerCase() === 'plu master' || /^result\s*-/i.test(sheetName)) {
+      throw new Error(`Tab yang sedang dibuka ('${sheetName}') bukan tab Input. Silakan buka/pilih tab Input yang ingin dihitung terlebih dahulu.`);
+    }
+    this.inputSheetName = sheetName;
 
     const lastRow = sheet.getLastRow();
     const lastCol = Math.max(sheet.getLastColumn(), 15);
     if (lastRow < 3) {
-      throw new Error("Tab 'Input' tidak memiliki data yang cukup.");
+      throw new Error(`Tab '${sheetName}' tidak memiliki data yang cukup.`);
     }
 
     const data = sheet.getRange(1, 1, lastRow, lastCol).getValues();
@@ -271,12 +300,13 @@ class DataLoader {
   }
 
   validate() {
+    const sheetName = this.inputSheetName || 'Input';
     if (this.promoRules.length === 0) {
-      throw new Error("Tidak ditemukan aturan promosi yang valid pada tab 'Input'.");
+      throw new Error(`Tidak ditemukan aturan promosi yang valid pada tab '${sheetName}'.`);
     }
 
     if (this.transactions.length === 0) {
-      throw new Error("Tidak ditemukan item transaksi pada bagian 'TRANSACTION & REFUND INPUT' di tab 'Input'.");
+      throw new Error(`Tidak ditemukan item transaksi pada bagian 'TRANSACTION & REFUND INPUT' di tab '${sheetName}'.`);
     }
 
     // Validasi PLU
